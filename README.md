@@ -28,7 +28,7 @@ written in C++17 with Qt 6 Widgets. native desktop executables for Linux, Window
 
 ## get a build
 
-open [desktop builds](https://github.com/sorried/chatgpt-status-bar/actions/workflows/build.yml), select a successful run and download its artifact. GitHub requires signing in to download workflow artifacts. unpack the whole archive so the Qt libraries stay beside the application.
+download [v0.2.0](https://github.com/sorried/chatgpt-status-bar/releases/tag/v0.2.0) with its `.sha256` checksum. alternatively, open [desktop builds](https://github.com/sorried/chatgpt-status-bar/actions/workflows/build.yml), select a successful run and download its artifact. GitHub requires signing in to download workflow artifacts. unpack the whole archive so the Qt libraries stay beside the application.
 
 | build | launch |
 | --- | --- |
@@ -37,6 +37,14 @@ open [desktop builds](https://github.com/sorried/chatgpt-status-bar/actions/work
 | macOS universal, Apple Silicon + Intel | open `gpt-status-bar.app` |
 
 the workflow builds with Qt 6.8.3. the source requires Qt 6.5 or newer. desktop builds are unsigned. macOS may require approval in system settings under privacy and security. on Linux, a tray implementation is needed for the tray icon; the floating panel stays available without one.
+
+on Linux x64, the repository also includes a per-user installer. keep the archive and matching checksum together, then run:
+
+```sh
+./install-linux.sh /path/to/gpt-status-bar-linux-x64.tar.gz
+```
+
+it installs under `~/.local`, adds a launcher, verifies SHA-256 and preserves existing versions. no administrator access is needed. `gpt-status-bar --settings` opens preferences directly.
 
 ## connect Codex
 
@@ -51,10 +59,12 @@ closing the monitor leaves it running in the tray and floating panel. use **quit
 
 ## appearance and settings
 
+the settings window uses a glass-style sidebar and grouped controls inspired by Apple's Liquid Glass design. light and dark themes, live appearance previews and reduced transparency are available. the material is drawn in Qt; desktop background blur depends on the compositor.
+
 the compact black panel shows the ChatGPT logo, current status and elapsed time. hover to reveal the task, project and latest activity. click to open the full monitor. the logo stays unchanged; a separate indicator shows activity. animation can be switched off.
 
 <img src="docs/screenshots/en/hover.png" width="360" alt="Task details shown on hover">
-<img src="docs/screenshots/en/appearance.png" width="580" alt="Appearance settings with a ChatGPT logo preview">
+<img src="docs/screenshots/en/appearance.png" width="840" alt="Appearance settings with a ChatGPT logo preview">
 
 settings are saved through the operating system's Qt settings backend. the app does not store credentials or edit your Codex configuration. Codex handles its own authentication and network requests. observation reads session metadata and recent activity into memory; it does not upload session files or maintain a second transcript archive. notifications contain the project folder name and status, not task text.
 
@@ -72,7 +82,7 @@ ctest --test-dir build -C Release --output-on-failure
 
 if CMake cannot find Qt, pass `-DCMAKE_PREFIX_PATH=/path/to/Qt/6.x/platform`. launch `build/gpt-status-bar` on Linux, `build/Release/gpt-status-bar.exe` with Visual Studio, or `build/gpt-status-bar.app` on macOS. to package Qt dependencies, configure with `-DDEPLOY_QT=ON`, build, then run `cmake --install build --config Release --prefix /absolute/path/to/stage`.
 
-GitHub Actions performs compilation, core tests, a headless startup check and runtime packaging for each desktop platform. a `v*` tag also publishes an experimental prerelease after all builds pass.
+GitHub Actions performs compilation, core and settings interaction tests, startup checks and runtime packaging for each desktop platform. a `v*` tag also publishes an experimental prerelease after all builds pass.
 
 ```sh
 ./build/gpt-status-bar --preview

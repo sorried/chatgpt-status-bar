@@ -11,7 +11,7 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     QCoreApplication::setOrganizationName("sorried");
     QCoreApplication::setApplicationName("gpt-status-bar");
-    QCoreApplication::setApplicationVersion("0.1.0");
+    QCoreApplication::setApplicationVersion("0.2.0");
     app.setQuitOnLastWindowClosed(false);
     QCommandLineParser parser;
     parser.setApplicationDescription("Native desktop companion for OpenAI Codex");
@@ -22,6 +22,8 @@ int main(int argc, char *argv[]) {
     parser.addOption({"capture", "Save preview screenshots and exit", "directory"});
     parser.addOption({"smoke-test", "Start the application and exit after one second"});
     parser.addOption({"language", "Preview language: en or ru", "language", "en"});
+    parser.addOption({"settings", "Open settings on startup"});
+    parser.addOption({"theme", "Preview theme: light or dark", "theme", "dark"});
     parser.process(app);
     const bool preview = parser.isSet("preview") || parser.isSet("capture");
     QTemporaryDir previewSettings;
@@ -30,8 +32,9 @@ int main(int argc, char *argv[]) {
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, previewSettings.path());
         QSettings settings;
         settings.setValue("language", parser.value("language") == "ru" ? "ru" : "en");
-        settings.setValue("theme", "dark");
+        settings.setValue("theme", parser.value("theme") == "light" ? "light" : "dark");
         settings.setValue("motion", false);
+        settings.setValue("codexHome", QDir::cleanPath(QDir::home().filePath("../demo/.codex")));
     }
     const auto runtime = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
     QDir().mkpath(runtime);
@@ -44,6 +47,8 @@ int main(int argc, char *argv[]) {
     App window(preview);
     if (!parser.isSet("background") || preview)
         window.show();
+    if (parser.isSet("settings"))
+        QTimer::singleShot(0, &window, [&] { window.openSettings(); });
     if (parser.isSet("capture"))
         QTimer::singleShot(100, &app, [&] {
             window.capture(parser.value("capture"));

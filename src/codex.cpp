@@ -1,4 +1,5 @@
 #include "codex.h"
+#include <QCoreApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QProcessEnvironment>
@@ -12,8 +13,9 @@ CodexClient::CodexClient(QObject *parent) : QObject(parent) {
     });
     connect(&process, &QProcess::started, this, [this] {
         call("initialize",
-             {{"clientInfo",
-               QJsonObject{{"name", "gpt_status_bar"}, {"title", "GPT status bar"}, {"version", "0.1.0"}}}});
+             {{"clientInfo", QJsonObject{{"name", "gpt_status_bar"},
+                                         {"title", "GPT status bar"},
+                                         {"version", QCoreApplication::applicationVersion()}}}});
         timeout.start();
     });
     connect(&process, &QProcess::readyReadStandardOutput, this, [this] {

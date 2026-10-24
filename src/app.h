@@ -40,6 +40,7 @@ class App : public QMainWindow {
     ~App() override;
     void capture(const QString &directory);
     void shutdown();
+    void openSettings();
 
   protected:
     void closeEvent(QCloseEvent *) override;
@@ -70,7 +71,6 @@ class App : public QMainWindow {
     void requestQuit();
     void applySettings();
     QDialog *settingsDialog();
-    void openSettings();
     void newTask();
     void handleRequests();
     void notify(const QString &id, State before, State after);

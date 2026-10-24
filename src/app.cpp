@@ -25,8 +25,8 @@
 #include <QShortcut>
 #include <QSpinBox>
 #include <QSplitter>
+#include <QStackedWidget>
 #include <QStandardPaths>
-#include <QTabWidget>
 #include <QVBoxLayout>
 #include <algorithm>
 
@@ -542,158 +542,6 @@ void App::applySettings() {
         tray.show();
     refresh();
 }
-QDialog *App::settingsDialog() {
-    auto *dialog = new QDialog(this);
-    dialog->setAttribute(Qt::WA_DeleteOnClose);
-    dialog->setWindowTitle(l("Settings", "настройки"));
-    dialog->resize(580, 470);
-    auto *outer = new QVBoxLayout(dialog);
-    auto *tabs = new QTabWidget;
-    auto *general = new QWidget;
-    auto *form = new QFormLayout(general);
-    auto *language = new QComboBox;
-    language->addItem("English", "en");
-    language->addItem("Русский", "ru");
-    language->setCurrentIndex(l("en", "ru") == "ru" ? 1 : 0);
-    form->addRow(l("Language", "язык"), language);
-    auto *notifications = new QCheckBox(
-        l("Notify when done, waiting or failed", "уведомлять о завершении, ожидании и ошибках"));
-    notifications->setChecked(settings.value("notifications", true).toBool());
-    form->addRow(notifications);
-    auto *sound = new QCheckBox(l("Play a system beep", "системный звук"));
-    sound->setChecked(settings.value("sound", false).toBool());
-    form->addRow(sound);
-    auto *startup = new QCheckBox(l("Start at login", "запускать при входе"));
-    startup->setChecked(settings.value("autostart", false).toBool());
-    form->addRow(startup);
-    auto *hover = new QCheckBox(l("Show details on hover", "подсказка при наведении"));
-    hover->setChecked(settings.value("hover", true).toBool());
-    form->addRow(hover);
-    auto *poll = new QSpinBox;
-    poll->setRange(1, 30);
-    poll->setSuffix(l(" seconds", " сек"));
-    poll->setValue(settings.value("pollSeconds", 3).toInt());
-    form->addRow(l("Read sessions every", "читать сессии каждые"), poll);
-    tabs->addTab(general, l("General", "основное"));
-    auto *appearance = new QWidget;
-    auto *visual = new QFormLayout(appearance);
-    auto combo = [](std::initializer_list<QPair<QString, QString>> values, const QString &current) {
-        auto *box = new QComboBox;
-        for (const auto &v : values)
-            box->addItem(v.first, v.second);
-        box->setCurrentIndex(qMax(0, box->findData(current)));
-        return box;
-    };
-    auto *theme = combo({{l("System", "системная"), "system"},
-                         {l("Dark", "тёмная"), "dark"},
-                         {l("Light", "светлая"), "light"}},
-                        settings.value("theme", "system").toString());
-    visual->addRow(l("Theme", "тема"), theme);
-    auto *motion = new QCheckBox(l("Animate companion", "анимация персонажа"));
-    motion->setChecked(settings.value("motion", true).toBool());
-    visual->addRow(motion);
-    auto *visible = new QCheckBox(l("Show floating status bar", "показывать плавающую панель"));
-    visible->setChecked(settings.value("companion", true).toBool());
-    visual->addRow(visible);
-    auto *position = combo({{l("Top center", "сверху по центру"), "top"},
-                            {l("Top right", "справа сверху"), "top-right"},
-                            {l("Bottom center", "снизу по центру"), "bottom"}},
-                           settings.value("position", "top").toString());
-    visual->addRow(l("Position", "расположение"), position);
-    auto *screen = new QComboBox;
-    for (auto *s : QGuiApplication::screens())
-        screen->addItem(s->name().isEmpty() ? l("Display %1", "экран %1").arg(screen->count() + 1)
-                                            : s->name());
-    screen->setCurrentIndex(qBound(0, settings.value("screen", 0).toInt(), qMax(0, screen->count() - 1)));
-    visual->addRow(l("Display", "экран"), screen);
-    auto *sample = new Mascot;
-    sample->setFixedSize(100, 100);
-    sample->configure(State::Working, motion->isChecked());
-    visual->addRow(sample);
-    auto updateSample = [=] { sample->configure(State::Working, motion->isChecked()); };
-    connect(motion, &QCheckBox::toggled, sample, updateSample);
-    tabs->addTab(appearance, l("Appearance", "внешний вид"));
-    auto *integration = new QWidget;
-    auto *integrationForm = new QFormLayout(integration);
-    auto *executable = new QLineEdit(settings.value("executable", "codex").toString());
-    auto *codexHome = new QLineEdit(home());
-    auto *model = new QLineEdit(settings.value("model").toString());
-    model->setPlaceholderText(l("Use the model from Codex settings", "модель из настроек Codex"));
-    integrationForm->addRow(l("Codex executable", "исполняемый файл Codex"), executable);
-    integrationForm->addRow("CODEX_HOME", codexHome);
-    integrationForm->addRow(l("Model override", "модель"), model);
-    auto *help =
-        new QLabel(l("Uses your existing Codex login. Run codex login in a terminal first. No credentials "
-                     "are stored by this app.\n\nLocal sessions are observed only. Tasks launched here use "
-                     "workspace-write isolation and ask for untrusted commands.\n\nChanging the executable "
-                     "or home requires reconnecting. Running tasks must finish first.",
-                     "используется существующий вход Codex. сначала выполни codex login в терминале. "
-                     "приложение не хранит учётные данные.\n\nлокальные сессии доступны для наблюдения. "
-                     "задачи отсюда используют workspace-write и запрашивают разрешения для недоверенных "
-                     "команд.\n\nсмена пути требует переподключения. сначала заверши запущенные задачи."));
-    help->setWordWrap(true);
-    integrationForm->addRow(help);
-    tabs->addTab(integration, l("Codex", "Codex"));
-    outer->addWidget(tabs);
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
-    buttons->button(QDialogButtonBox::Save)->setText(l("Save", "сохранить"));
-    buttons->button(QDialogButtonBox::Cancel)->setText(l("Cancel", "отмена"));
-    outer->addWidget(buttons);
-    connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
-    connect(buttons, &QDialogButtonBox::accepted, dialog, [=] {
-        const QString nextHome = QDir::cleanPath(codexHome->text().trimmed());
-        if (!QDir::isAbsolutePath(nextHome) || executable->text().trimmed().isEmpty()) {
-            QMessageBox::warning(dialog, l("Invalid path", "неверный путь"),
-                                 l("Enter an absolute CODEX_HOME and a Codex executable.",
-                                   "укажи абсолютный CODEX_HOME и исполняемый файл Codex."));
-            return;
-        }
-        const bool reconnect = nextHome != home() || executable->text().trimmed() !=
-                                                         settings.value("executable", "codex").toString();
-        if (reconnect && hasActiveTasks()) {
-            QMessageBox::warning(dialog, l("Tasks are running", "задачи ещё работают"),
-                                 l("Finish or stop tasks before changing Codex paths.",
-                                   "заверши или останови задачи перед сменой путей Codex."));
-            return;
-        }
-        QString failure;
-        if (!preview && startup->isChecked() != settings.value("autostart", false).toBool() &&
-            !setAutostart(startup->isChecked(), &failure)) {
-            QMessageBox::warning(dialog, l("Could not change startup", "не удалось изменить автозапуск"),
-                                 failure);
-            return;
-        }
-        const QString previousHome = home();
-        settings.setValue("language", language->currentData());
-        settings.setValue("theme", theme->currentData());
-        settings.setValue("motion", motion->isChecked());
-        settings.setValue("companion", visible->isChecked());
-        settings.setValue("position", position->currentData());
-        settings.setValue("screen", screen->currentIndex());
-        settings.setValue("notifications", notifications->isChecked());
-        settings.setValue("sound", sound->isChecked());
-        settings.setValue("hover", hover->isChecked());
-        settings.setValue("autostart", startup->isChecked());
-        settings.setValue("pollSeconds", poll->value());
-        settings.setValue("executable", executable->text().trimmed());
-        settings.setValue("codexHome", nextHome);
-        settings.setValue("model", model->text().trimmed());
-        settings.sync();
-        if (reconnect) {
-            client.stop();
-            rateLimits = {};
-            errorText.clear();
-        }
-        if (!preview && previousHome != nextHome) {
-            booting = true;
-            watcher.setHome(nextHome);
-            booting = false;
-        }
-        applySettings();
-        dialog->accept();
-    });
-    return dialog;
-}
 void App::openSettings() { settingsDialog()->open(); }
 void App::newTask() {
     auto *dialog = new QDialog(this);
@@ -929,9 +777,12 @@ void App::capture(const QString &directory) {
     dialog->show();
     qApp->processEvents();
     dialog->grab().save(QDir(directory).filePath("settings.png"));
-    dialog->findChild<QTabWidget *>()->setCurrentIndex(1);
+    dialog->findChild<QListWidget *>("navigation")->setCurrentRow(1);
     qApp->processEvents();
     dialog->grab().save(QDir(directory).filePath("appearance.png"));
+    dialog->findChild<QListWidget *>("navigation")->setCurrentRow(2);
+    qApp->processEvents();
+    dialog->grab().save(QDir(directory).filePath("connection.png"));
     dialog->close();
     companion.showDetails();
     qApp->processEvents();

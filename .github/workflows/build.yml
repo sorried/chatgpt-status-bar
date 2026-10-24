@@ -71,6 +71,8 @@ jobs:
       - name: package (Windows)
         if: runner.os == 'Windows'
         run: Compress-Archive -Path stage/* -DestinationPath gpt-status-bar-${{ matrix.name }}.zip
+      - name: write SHA-256 checksum
+        run: cmake -DNAME=gpt-status-bar-${{ matrix.name }} -P packaging/checksum.cmake
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: gpt-status-bar-${{ matrix.name }}
@@ -83,13 +85,16 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           path: artifacts
           merge-multiple: true
+      - name: checksum Linux installer
+        run: sha256sum install-linux.sh > install-linux.sh.sha256
       - name: publish prerelease
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG_NAME: ${{ github.ref_name }}
-        run: gh release create "$TAG_NAME" artifacts/* --prerelease --title "$TAG_NAME" --notes 'Experimental, vibe-coded build. May be unstable. Экспериментальная вайбкод-сборка, возможна нестабильная работа.'
+        run: gh release create "$TAG_NAME" artifacts/* install-linux.sh install-linux.sh.sha256 --prerelease --title "GPT status bar $TAG_NAME" --notes-file "docs/releases/$TAG_NAME.md"

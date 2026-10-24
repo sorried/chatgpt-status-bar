@@ -4,6 +4,6 @@ Name=GPT status bar
 Comment=Desktop status companion for OpenAI Codex
 Exec=gpt-status-bar
 Icon=io.github.sorried.gpt-status-bar
-Categories=Development;Utility;
+Categories=Development;
 Terminal=false
 StartupNotify=true
