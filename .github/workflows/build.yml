@@ -1,0 +1,89 @@
+name: desktop builds
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            name: linux-x64
+          - os: windows-latest
+            name: windows-x64
+          - os: macos-14
+            name: macos-universal
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: install Linux runtime dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libxcb-xinerama0 libxcb-image0 libxcb-render-util0 libegl1
+      - uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125
+        with:
+          version: '6.8.3'
+          cache: true
+      - name: configure
+        if: runner.os != 'macOS'
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DDEPLOY_QT=ON -DCMAKE_INSTALL_LIBDIR=lib
+      - name: configure universal macOS build
+        if: runner.os == 'macOS'
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DDEPLOY_QT=ON '-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64'
+      - name: build
+        run: cmake --build build --config Release --parallel 3
+      - name: tests
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: startup check (Linux)
+        if: runner.os == 'Linux'
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: timeout 20s build/gpt-status-bar --preview --smoke-test
+      - name: startup check (macOS)
+        if: runner.os == 'macOS'
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: build/gpt-status-bar.app/Contents/MacOS/gpt-status-bar --preview --smoke-test
+      - name: startup check (Windows)
+        if: runner.os == 'Windows'
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $process = Start-Process -FilePath build/Release/gpt-status-bar.exe -ArgumentList '--preview','--smoke-test' -PassThru
+          if (-not $process.WaitForExit(20000)) { $process.Kill(); throw 'startup timed out' }
+          if ($process.ExitCode -ne 0) { throw "startup failed: $($process.ExitCode)" }
+      - name: install runtime bundle
+        run: cmake --install build --config Release --prefix stage
+      - name: package (Unix)
+        if: runner.os != 'Windows'
+        run: tar -czf gpt-status-bar-${{ matrix.name }}.tar.gz -C stage .
+      - name: package (Windows)
+        if: runner.os == 'Windows'
+        run: Compress-Archive -Path stage/* -DestinationPath gpt-status-bar-${{ matrix.name }}.zip
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: gpt-status-bar-${{ matrix.name }}
+          path: gpt-status-bar-${{ matrix.name }}.*
+          if-no-files-found: error
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: gh release create "$TAG_NAME" artifacts/* --prerelease --title "$TAG_NAME" --notes 'Experimental, vibe-coded build. May be unstable. Экспериментальная вайбкод-сборка, возможна нестабильная работа.'

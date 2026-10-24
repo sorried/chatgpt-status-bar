@@ -1,0 +1,10 @@
+/build*/
+/work/
+/outputs/
+.env*
+*.pem
+*.key
+id_*
+credentials.json
+.DS_Store
+CMakeUserPresets.json

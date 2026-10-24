@@ -1,0 +1,71 @@
+#pragma once
+#include "codex.h"
+#include "mascot.h"
+#include "watcher.h"
+#include <QDialog>
+#include <QLabel>
+#include <QListWidget>
+#include <QMainWindow>
+#include <QPushButton>
+#include <QSettings>
+#include <QSystemTrayIcon>
+#include <QTextEdit>
+
+class Companion : public QWidget {
+    Q_OBJECT
+  public:
+    explicit Companion(QWidget *parent = nullptr);
+    Mascot *mascot;
+    QLabel *label;
+    void place(int screen, const QString &position);
+  signals:
+    void activated();
+    void hovered();
+
+  protected:
+    void paintEvent(QPaintEvent *) override;
+    void mouseReleaseEvent(QMouseEvent *) override;
+    void enterEvent(QEnterEvent *) override;
+};
+class App : public QMainWindow {
+    Q_OBJECT
+  public:
+    explicit App(bool preview = false);
+    void capture(const QString &directory);
+    void shutdown();
+
+  protected:
+    void closeEvent(QCloseEvent *) override;
+
+  private:
+    QSettings settings;
+    SessionStore store;
+    SessionWatcher watcher;
+    CodexClient client;
+    QSystemTrayIcon tray;
+    Companion companion;
+    QTimer clock, limitTimer;
+    QListWidget *list;
+    QLabel *summary, *connection, *meta, *usage;
+    QTextEdit *detail;
+    QPushButton *connectButton, *taskButton, *stopButton, *folderButton;
+    Mascot *avatar;
+    QJsonObject rateLimits;
+    QList<QJsonObject> requests;
+    bool preview, booting = true, handlingRequest = false, quitting = false;
+    QString errorText;
+    QString l(const char *en, const char *ru) const;
+    QString home() const;
+    QString stateName(State state) const;
+    QString selected() const;
+    void refresh();
+    void showWindow();
+    void applySettings();
+    QDialog *settingsDialog();
+    void openSettings();
+    void newTask();
+    void handleRequests();
+    void notify(const QString &id, State before, State after);
+    bool setAutostart(bool enabled, QString *error);
+    bool hasActiveTasks() const;
+};

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=GPT status bar
+Comment=Desktop status companion for OpenAI Codex
+Exec=gpt-status-bar
+Icon=io.github.sorried.gpt-status-bar
+Categories=Development;Utility;
+Terminal=false
+StartupNotify=true
