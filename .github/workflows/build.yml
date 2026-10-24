@@ -21,10 +21,10 @@ jobs:
             name: macos-universal
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: install Linux runtime dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libxcb-xinerama0 libxcb-image0 libxcb-render-util0 libegl1
+        run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libxcb-xinerama0 libxcb-image0 libxcb-render-util0 libegl1 xvfb
       - uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125
         with:
           version: '6.8.3'
@@ -59,7 +59,11 @@ jobs:
           if ($process.ExitCode -ne 0) { throw "startup failed: $($process.ExitCode)" }
       - name: install runtime bundle
         run: cmake --install build --config Release --prefix "${{ github.workspace }}/stage"
-      - name: verify installed application
+      - name: verify installed application (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a cmake '-DROOT=${{ github.workspace }}/stage' -P tests/verify_install.cmake
+      - name: verify installed application (Windows and macOS)
+        if: runner.os != 'Linux'
         run: cmake '-DROOT=${{ github.workspace }}/stage' -P tests/verify_install.cmake
       - name: package (Unix)
         if: runner.os != 'Windows'
@@ -67,7 +71,7 @@ jobs:
       - name: package (Windows)
         if: runner.os == 'Windows'
         run: Compress-Archive -Path stage/* -DestinationPath gpt-status-bar-${{ matrix.name }}.zip
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: gpt-status-bar-${{ matrix.name }}
           path: gpt-status-bar-${{ matrix.name }}.*
@@ -79,7 +83,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           path: artifacts
           merge-multiple: true

@@ -47,7 +47,7 @@ the workflow builds with Qt 6.8.3. the source requires Qt 6.5 or newer. desktop 
 
 observed sessions keep their approval prompts in their original Codex client. tasks launched here can be approved here. new tasks request the `untrusted` approval policy and `workspace-write` isolation. local Codex policy can impose additional restrictions. the app never automatically approves requests or enables unrestricted execution.
 
-closing the monitor leaves it running in the tray and floating panel. use **quit** in the tray menu to exit. quitting stops this application's Codex server; finish or stop its running tasks first. start at login refers to this application's current path, so turn it off before moving or removing the app.
+closing the monitor leaves it running in the tray and floating panel. use **quit** in the window or tray menu to exit. quitting stops this application's Codex server; finish or stop its running tasks first. start at login refers to this application's current path, so turn it off before moving or removing the app.
 
 ## appearance and settings
 

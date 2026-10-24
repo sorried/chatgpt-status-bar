@@ -67,6 +67,7 @@ class App : public QMainWindow {
     QString selected() const;
     void refresh();
     void showWindow();
+    void requestQuit();
     void applySettings();
     QDialog *settingsDialog();
     void openSettings();

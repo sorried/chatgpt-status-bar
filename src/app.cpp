@@ -228,6 +228,10 @@ App::App(bool preview) : watcher(&store), preview(preview) {
     actions->addStretch();
     actions->addWidget(folderButton);
     actions->addWidget(stopButton);
+    auto *quitButton = new QPushButton;
+    quitButton->setObjectName("quitButton");
+    connect(quitButton, &QPushButton::clicked, this, &App::requestQuit);
+    actions->addWidget(quitButton);
     layout->addLayout(actions);
     setCentralWidget(body);
     connect(list, &QListWidget::currentRowChanged, this, &App::refresh);
@@ -296,7 +300,11 @@ App::App(bool preview) : watcher(&store), preview(preview) {
         if (QFileInfo(cwd).isDir())
             QDesktopServices::openUrl(QUrl::fromLocalFile(cwd));
     });
-    connect(&companion, &Companion::activated, this, &App::showWindow);
+    connect(&companion, &Companion::activated, this, [this] {
+        if (list->count())
+            list->setCurrentRow(0);
+        showWindow();
+    });
     connect(&tray, &QSystemTrayIcon::activated, this, [this](auto reason) {
         if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick)
             showWindow();
@@ -307,7 +315,7 @@ App::App(bool preview) : watcher(&store), preview(preview) {
     limitTimer.setInterval(5 * 60 * 1000);
     connect(&limitTimer, &QTimer::timeout, &client, &CodexClient::refreshLimits);
     limitTimer.start();
-    auto *shortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Comma), this);
+    auto *shortcut = new QShortcut(QKeySequence::Preferences, this);
     connect(shortcut, &QShortcut::activated, this, &App::openSettings);
     applySettings();
     if (!preview)
@@ -493,6 +501,7 @@ void App::showWindow() {
 void App::applySettings() {
     setWindowTitle(l("GPT status bar", "GPT status bar"));
     findChild<QPushButton *>("settingsButton")->setText(l("Settings", "настройки"));
+    findChild<QPushButton *>("quitButton")->setText(l("Quit", "выйти"));
     const QString theme = settings.value("theme", "system").toString();
     const bool dark =
         theme == "dark" || (theme == "system" && qApp->palette().color(QPalette::Window).lightness() < 128);
@@ -525,15 +534,7 @@ void App::applySettings() {
     menu->addAction(l("Open", "открыть"), this, &App::showWindow);
     menu->addAction(l("Settings", "настройки"), this, &App::openSettings);
     menu->addSeparator();
-    menu->addAction(l("Quit", "выйти"), this, [this] {
-        if (hasActiveTasks() &&
-            QMessageBox::question(this, l("Quit?", "выйти?"),
-                                  l("Running tasks started here will be stopped. Quit?",
-                                    "запущенные здесь задачи будут остановлены. выйти?")) != QMessageBox::Yes)
-            return;
-        quitting = true;
-        qApp->quit();
-    });
+    menu->addAction(l("Quit", "выйти"), this, &App::requestQuit);
     tray.setContextMenu(menu);
     if (old)
         old->deleteLater();
@@ -947,4 +948,13 @@ App::~App() {
     disconnect(&client, nullptr, this, nullptr);
     disconnect(&store, nullptr, this, nullptr);
     client.stop();
+}
+
+void App::requestQuit() {
+    if (hasActiveTasks() &&
+        QMessageBox::question(this, l("Quit?", "выйти?"),
+                              l("Running tasks started here will be stopped. Quit?",
+                                "запущенные здесь задачи будут остановлены. выйти?")) != QMessageBox::Yes)
+        return;
+    shutdown();
 }
