@@ -100,7 +100,10 @@ void SessionStore::ingestRpc(const QJsonObject &e) {
     const auto item = p["item"].toObject();
     if (method == "thread/started") {
         s.cwd = thread["cwd"].toString();
-        s.title = thread["preview"].toString().left(180);
+        const auto title = thread["preview"].toString();
+        if (!title.isEmpty())
+            s.title = title.left(180);
+        s.model = thread["model"].toString(s.model);
     } else if (method == "turn/started") {
         s.state = State::Working;
         s.started = s.updated;

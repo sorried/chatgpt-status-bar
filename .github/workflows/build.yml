@@ -58,7 +58,9 @@ jobs:
           if (-not $process.WaitForExit(20000)) { $process.Kill(); throw 'startup timed out' }
           if ($process.ExitCode -ne 0) { throw "startup failed: $($process.ExitCode)" }
       - name: install runtime bundle
-        run: cmake --install build --config Release --prefix stage
+        run: cmake --install build --config Release --prefix "${{ github.workspace }}/stage"
+      - name: verify installed application
+        run: cmake '-DROOT=${{ github.workspace }}/stage' -P tests/verify_install.cmake
       - name: package (Unix)
         if: runner.os != 'Windows'
         run: tar -czf gpt-status-bar-${{ matrix.name }}.tar.gz -C stage .

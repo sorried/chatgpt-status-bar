@@ -8,7 +8,7 @@
 
 `src/app.*` owns the monitor, settings, tray and floating window. new tasks use the user's selected project and model, `approvalPolicy: untrusted`, and `sandbox: workspace-write`. individual approvals default to deny. task text, commands and other remote content are rendered as plain text. unsupported server requests receive a JSON-RPC method-not-found error. this client does not implement automatic execution or approvals.
 
-`src/mascot.*` draws original companions with QPainter. a timer animates visible companions only. there are no downloaded sprites or web assets.
+`src/mascot.*` displays the bundled ChatGPT logo and draws a separate activity indicator with QPainter. a timer animates the indicator only while visible and working. there are no remote image requests.
 
 ## protocol references
 

@@ -8,7 +8,7 @@ class Mascot : public QWidget {
     Q_OBJECT
   public:
     explicit Mascot(QWidget *parent = nullptr);
-    void configure(State state, const QString &skin, bool motion);
+    void configure(State state, bool motion);
     static QIcon icon(State state = State::Idle);
 
   protected:
@@ -18,7 +18,6 @@ class Mascot : public QWidget {
 
   private:
     State state = State::Idle;
-    QString skin = "scout";
     bool motion = true;
     int frame = 0;
     QTimer timer;

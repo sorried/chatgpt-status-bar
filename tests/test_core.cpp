@@ -39,6 +39,54 @@ class CoreTests : public QObject {
         QCOMPARE(store.sessions()["a"].detail, "finished");
         QCOMPARE(changes.size(), 4);
     }
+    void currentRolloutMessages() {
+        SessionStore store;
+        store.ingestLog("a", logEvent("response_item",
+                                      {{"type", "message"},
+                                       {"role", "user"},
+                                       {"content", QJsonArray{QJsonObject{{"type", "input_text"},
+                                                                          {"text", "fix the build"}}}}}));
+        QCOMPARE(store.sessions()["a"].title, "fix the build");
+        store.ingestLog(
+            "a", logEvent("response_item",
+                          {{"type", "message"},
+                           {"role", "user"},
+                           {"content", QJsonArray{QJsonObject{
+                                           {"type", "input_text"},
+                                           {"text", "<environment_context>data</environment_context>"}}}}}));
+        QCOMPARE(store.sessions()["a"].title, "fix the build");
+        store.ingestLog("a", logEvent("response_item", {{"type", "reasoning"}}));
+        QCOMPARE(store.sessions()["a"].state, State::Thinking);
+    }
+    void batchedHistoryHasOneTransition() {
+        SessionStore store;
+        QSignalSpy changed(&store, &SessionStore::changed);
+        QSignalSpy states(&store, &SessionStore::transitioned);
+        store.beginBatch();
+        store.ingestLog("a", logEvent("event_msg", {{"type", "task_started"}}));
+        store.ingestLog("a", logEvent("event_msg", {{"type", "agent_reasoning"}}));
+        store.ingestLog("a", logEvent("event_msg", {{"type", "task_complete"}}));
+        QVERIFY(changed.isEmpty());
+        store.endBatch();
+        QCOMPARE(changed.size(), 1);
+        QCOMPARE(states.size(), 1);
+        QCOMPARE(store.sessions()["a"].state, State::Done);
+        store.retainObserved({});
+        QVERIFY(store.sessions().isEmpty());
+    }
+    void fileApprovalPreservesDiff() {
+        SessionStore store;
+        store.ingestRpc(rpc(
+            "item/started",
+            {{"threadId", "a"},
+             {"item", QJsonObject{{"type", "fileChange"},
+                                  {"changes",
+                                   QJsonArray{QJsonObject{{"path", "app.cpp"}, {"diff", "+new line"}}}}}}}));
+        store.ingestRpc(
+            rpc("item/fileChange/requestApproval", {{"threadId", "a"}, {"reason", "write files"}}));
+        QCOMPARE(store.sessions()["a"].state, State::Waiting);
+        QVERIFY(store.sessions()["a"].detail.contains("+new line"));
+    }
     void staleIsUnknown() {
         SessionStore store;
         store.ingestLog("a", logEvent("event_msg", {{"type", "task_started"}},
@@ -141,7 +189,7 @@ class CoreTests : public QObject {
         auto request = requests[0][0].toJsonObject();
         QCOMPARE(request["method"].toString(), "item/commandExecution/requestApproval");
         client.answer(request["id"], {{"decision", "decline"}});
-        QTRY_VERIFY(events.size() >= 4);
+        QTRY_VERIFY(!events.isEmpty() && events.last()[0].toJsonObject()["method"] == "turn/completed");
         QVERIFY(errors.isEmpty());
         client.stop();
         QVERIFY(!client.connected());

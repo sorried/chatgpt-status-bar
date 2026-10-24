@@ -17,20 +17,27 @@ class Companion : public QWidget {
     explicit Companion(QWidget *parent = nullptr);
     Mascot *mascot;
     QLabel *label;
+    QLabel *status;
+    QWidget *card;
+    QLabel *cardTitle, *cardTask, *cardDetail;
+    bool hoverEnabled = true;
+    void showDetails();
     void place(int screen, const QString &position);
   signals:
     void activated();
-    void hovered();
 
   protected:
     void paintEvent(QPaintEvent *) override;
     void mouseReleaseEvent(QMouseEvent *) override;
     void enterEvent(QEnterEvent *) override;
+    void leaveEvent(QEvent *) override;
+    bool eventFilter(QObject *object, QEvent *event) override;
 };
 class App : public QMainWindow {
     Q_OBJECT
   public:
     explicit App(bool preview = false);
+    ~App() override;
     void capture(const QString &directory);
     void shutdown();
 

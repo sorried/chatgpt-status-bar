@@ -110,7 +110,10 @@ void CodexClient::receive(const QJsonObject &message) {
         emit connectionChanged(true);
         refreshLimits();
     } else if (op.method == "thread/start") {
-        const auto thread = result["thread"].toObject();
+        auto thread = result["thread"].toObject();
+        if (thread["preview"].toString().isEmpty())
+            thread.insert("preview", op.prompt.simplified().left(180));
+        thread.insert("model", result["model"]);
         const auto threadId = thread["id"].toString();
         if (threadId.isEmpty()) {
             emit error("Codex returned no thread id.");

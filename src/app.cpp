@@ -36,24 +36,49 @@ Companion::Companion(QWidget *parent) : QWidget(parent) {
     setWindowTitle("GPT status bar");
     setAccessibleName("GPT status companion");
     setCursor(Qt::PointingHandCursor);
-    setFixedSize(248, 64);
+    setFixedSize(224, 40);
     auto *layout = new QHBoxLayout(this);
-    layout->setContentsMargins(12, 4, 18, 4);
+    layout->setContentsMargins(8, 3, 14, 3);
     mascot = new Mascot;
-    mascot->setFixedSize(56, 56);
+    mascot->setFixedSize(32, 32);
     label = new QLabel;
-    label->setStyleSheet("color: #f1f5f4; font-weight: 600; font-size: 13px; background: transparent;");
+    label->setStyleSheet("color: #f1f5f4; font-weight: 600; font-size: 12px; background: transparent;");
     label->setAttribute(Qt::WA_TransparentForMouseEvents);
     mascot->setAttribute(Qt::WA_TransparentForMouseEvents);
+    status = new QLabel;
+    status->setAttribute(Qt::WA_TransparentForMouseEvents);
+    status->setStyleSheet("color: #c9c9c9; font-size: 11px; background: transparent;");
+    label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     layout->addWidget(mascot);
-    layout->addWidget(label, 1);
+    layout->addWidget(status, 1);
+    layout->addWidget(label);
+    card = new QWidget(this, Qt::Tool | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
+    card->setWindowTitle("Codex activity");
+    card->setCursor(Qt::PointingHandCursor);
+    card->installEventFilter(this);
+    card->setFixedWidth(360);
+    card->setStyleSheet(
+        "QWidget { background: #090909; color: #f1f1f1; } QLabel { background: transparent; padding: 0; }");
+    auto *details = new QVBoxLayout(card);
+    details->setContentsMargins(20, 18, 20, 18);
+    details->setSpacing(10);
+    cardTitle = new QLabel;
+    cardTask = new QLabel;
+    cardDetail = new QLabel;
+    cardTitle->setStyleSheet("font-weight: 600; font-size: 14px;");
+    cardDetail->setStyleSheet("color: #b8b8b8; font-size: 12px;");
+    for (auto *text : {cardTitle, cardTask, cardDetail}) {
+        text->setTextFormat(Qt::PlainText);
+        text->setWordWrap(true);
+        details->addWidget(text);
+    }
 }
 void Companion::paintEvent(QPaintEvent *) {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
-    p.setPen(QPen(QColor("#44514e"), 1));
-    p.setBrush(QColor("#121a18"));
-    p.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 20, 20);
+    p.setPen(QPen(QColor("#292929"), 1));
+    p.setBrush(QColor("#050505"));
+    p.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 18, 18);
 }
 void Companion::mouseReleaseEvent(QMouseEvent *e) {
     if (e->button() == Qt::LeftButton)
@@ -61,7 +86,43 @@ void Companion::mouseReleaseEvent(QMouseEvent *e) {
 }
 void Companion::enterEvent(QEnterEvent *e) {
     QWidget::enterEvent(e);
-    emit hovered();
+    if (hoverEnabled)
+        showDetails();
+}
+void Companion::leaveEvent(QEvent *e) {
+    QWidget::leaveEvent(e);
+    QTimer::singleShot(180, card, [this] {
+        if (!underMouse() && !card->underMouse())
+            card->hide();
+    });
+}
+bool Companion::eventFilter(QObject *object, QEvent *event) {
+    if (object == card && event->type() == QEvent::Leave)
+        QTimer::singleShot(180, card, [this] {
+            if (!underMouse() && !card->underMouse())
+                card->hide();
+        });
+    if (object == card && event->type() == QEvent::MouseButtonRelease) {
+        if (static_cast<QMouseEvent *>(event)->button() == Qt::LeftButton) {
+            card->hide();
+            emit activated();
+        }
+    }
+    return QWidget::eventFilter(object, event);
+}
+void Companion::showDetails() {
+    card->adjustSize();
+    auto *screen = QGuiApplication::screenAt(geometry().center());
+    if (!screen)
+        return;
+    const auto area = screen->availableGeometry();
+    const int x =
+        qBound(area.left(), geometry().center().x() - card->width() / 2, area.right() - card->width() + 1);
+    const int y = geometry().bottom() + card->height() + 8 < area.bottom()
+                      ? geometry().bottom() + 5
+                      : geometry().top() - card->height() - 5;
+    card->move(x, y);
+    card->show();
 }
 void Companion::place(int index, const QString &position) {
     auto screens = QGuiApplication::screens();
@@ -236,12 +297,6 @@ App::App(bool preview) : watcher(&store), preview(preview) {
             QDesktopServices::openUrl(QUrl::fromLocalFile(cwd));
     });
     connect(&companion, &Companion::activated, this, &App::showWindow);
-    connect(&companion, &Companion::hovered, this, [this] {
-        if (settings.value("hover", true).toBool()) {
-            const auto s = store.sessions().value(selected());
-            companion.setToolTip((stateName(s.state) + "\n" + s.title.left(180)).toHtmlEscaped());
-        }
-    });
     connect(&tray, &QSystemTrayIcon::activated, this, [this](auto reason) {
         if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick)
             showWindow();
@@ -352,12 +407,11 @@ void App::refresh() {
         if (detail->toPlainText() != s.detail)
             detail->setPlainText(s.detail);
     }
-    const QString skin = settings.value("mascot", "scout").toString();
     const bool motion = settings.value("motion", true).toBool();
     const auto state = sessions.isEmpty() ? State::Idle : s.state;
-    avatar->configure(state, skin, motion);
+    avatar->configure(state, motion);
     const auto primary = sessions.isEmpty() ? Session{} : sessions.first();
-    companion.mascot->configure(primary.state, skin, motion);
+    companion.mascot->configure(primary.state, motion);
     const auto seconds =
         primary.started.isValid()
             ? qMax<qint64>(0, primary.started.secsTo(
@@ -369,8 +423,12 @@ void App::refresh() {
     const auto elapsed = primary.started.isValid()
                              ? QString("%1:%2").arg(seconds / 60).arg(seconds % 60, 2, 10, QChar('0'))
                              : "GPT";
-    companion.label->setText(stateName(primary.state) + (active > 1 ? QString(" · %1").arg(active) : "") +
-                             "\n" + elapsed);
+    companion.label->setText(elapsed);
+    companion.status->setText(stateName(primary.state) + (active > 1 ? QString(" · %1").arg(active) : ""));
+    companion.cardTitle->setText("Codex · " + stateName(primary.state));
+    companion.cardTask->setText(primary.title.isEmpty() ? l("No active task", "нет активной задачи")
+                                                        : primary.title.left(220));
+    companion.cardDetail->setText(QFileInfo(primary.cwd).fileName() + "\n" + primary.detail.left(280));
     tray.setIcon(Mascot::icon(primary.state));
     tray.setToolTip("GPT · " + stateName(primary.state));
     QString status = client.connected() ? l("Codex connected", "Codex подключён")
@@ -441,20 +499,23 @@ void App::applySettings() {
     if (theme == "system")
         setStyleSheet({});
     else {
-        const QString bg = dark ? "#141b19" : "#f5f7f6";
-        const QString fg = dark ? "#e7eeeb" : "#182a24";
-        const QString field = dark ? "#1d2824" : "#ffffff";
-        const QString border = dark ? "#4c6258" : "#94a99f";
+        const QString bg = dark ? "#111111" : "#f7f7f7";
+        const QString fg = dark ? "#eeeeee" : "#171717";
+        const QString field = dark ? "#191919" : "#ffffff";
+        const QString border = dark ? "#444444" : "#aaaaaa";
         setStyleSheet(
             QString("QWidget { background: %1; color: %2; } QListWidget, QTextEdit, QLineEdit, QComboBox, "
                     "QSpinBox { background: %3; border: 1px solid %4; border-radius: 6px; padding: 7px; } "
                     "QPushButton { background: %3; border: 1px solid %4; border-radius: 6px; padding: 8px "
-                    "12px; } QPushButton:hover { border-color: #23936c; } QPushButton:focus { border: 2px "
-                    "solid #23936c; } QPushButton:disabled { color: %4; } QListWidget::item { padding: 5px; "
+                    "12px; } QPushButton:hover { border-color: #8e8e8e; } QPushButton:focus { border: 2px "
+                    "solid #8e8e8e; } QPushButton:disabled { color: %4; } QListWidget::item { padding: 5px; "
                     "} QListWidget::item:selected { background: %4; color: %2; } QToolTip { background: %3; "
                     "color: %2; border: 1px solid %4; }")
                 .arg(bg, fg, field, border));
     }
+    companion.hoverEnabled = settings.value("hover", true).toBool();
+    if (!companion.hoverEnabled)
+        companion.card->hide();
     companion.place(settings.value("screen", 0).toInt(), settings.value("position", "top").toString());
     companion.setVisible(settings.value("companion", true).toBool() ||
                          !QSystemTrayIcon::isSystemTrayAvailable());
@@ -527,9 +588,6 @@ QDialog *App::settingsDialog() {
                          {l("Light", "светлая"), "light"}},
                         settings.value("theme", "system").toString());
     visual->addRow(l("Theme", "тема"), theme);
-    auto *skin = combo({{"Scout", "scout"}, {"Comet", "comet"}, {"Pixel", "pixel"}},
-                       settings.value("mascot", "scout").toString());
-    visual->addRow(l("Companion", "персонаж"), skin);
     auto *motion = new QCheckBox(l("Animate companion", "анимация персонажа"));
     motion->setChecked(settings.value("motion", true).toBool());
     visual->addRow(motion);
@@ -543,17 +601,15 @@ QDialog *App::settingsDialog() {
     visual->addRow(l("Position", "расположение"), position);
     auto *screen = new QComboBox;
     for (auto *s : QGuiApplication::screens())
-        screen->addItem(s->name());
+        screen->addItem(s->name().isEmpty() ? l("Display %1", "экран %1").arg(screen->count() + 1)
+                                            : s->name());
     screen->setCurrentIndex(qBound(0, settings.value("screen", 0).toInt(), qMax(0, screen->count() - 1)));
     visual->addRow(l("Display", "экран"), screen);
     auto *sample = new Mascot;
     sample->setFixedSize(100, 100);
-    sample->configure(State::Working, skin->currentData().toString(), motion->isChecked());
+    sample->configure(State::Working, motion->isChecked());
     visual->addRow(sample);
-    auto updateSample = [=] {
-        sample->configure(State::Working, skin->currentData().toString(), motion->isChecked());
-    };
-    connect(skin, &QComboBox::currentIndexChanged, sample, updateSample);
+    auto updateSample = [=] { sample->configure(State::Working, motion->isChecked()); };
     connect(motion, &QCheckBox::toggled, sample, updateSample);
     tabs->addTab(appearance, l("Appearance", "внешний вид"));
     auto *integration = new QWidget;
@@ -609,7 +665,6 @@ QDialog *App::settingsDialog() {
         const QString previousHome = home();
         settings.setValue("language", language->currentData());
         settings.setValue("theme", theme->currentData());
-        settings.setValue("mascot", skin->currentData());
         settings.setValue("motion", motion->isChecked());
         settings.setValue("companion", visible->isChecked());
         settings.setValue("position", position->currentData());
@@ -877,34 +932,19 @@ void App::capture(const QString &directory) {
     qApp->processEvents();
     dialog->grab().save(QDir(directory).filePath("appearance.png"));
     dialog->close();
-    QWidget sheet;
-    sheet.setStyleSheet("background: #141b19; color: #e7eeeb;");
-    auto *grid = new QGridLayout(&sheet);
-    int row = 0;
-    for (const QString &skin : {"scout", "comet", "pixel"}) {
-        grid->addWidget(new QLabel(skin), row, 0);
-        int col = 1;
-        for (const auto state :
-             {State::Idle, State::Working, State::Thinking, State::Waiting, State::Done, State::Error}) {
-            auto *cell = new QWidget;
-            auto *layout = new QVBoxLayout(cell);
-            auto *mascot = new Mascot;
-            mascot->setFixedSize(80, 80);
-            mascot->configure(state, skin, false);
-            auto *caption = new QLabel(stateName(state));
-            caption->setAlignment(Qt::AlignCenter);
-            layout->addWidget(mascot, 0, Qt::AlignCenter);
-            layout->addWidget(caption);
-            grid->addWidget(cell, row, col++);
-        }
-        ++row;
-    }
-    sheet.show();
+    companion.showDetails();
     qApp->processEvents();
-    sheet.grab().save(QDir(directory).filePath("companions.png"));
+    companion.card->grab().save(QDir(directory).filePath("hover.png"));
+    companion.card->hide();
 }
 
 void App::shutdown() {
     quitting = true;
     qApp->quit();
+}
+
+App::~App() {
+    disconnect(&client, nullptr, this, nullptr);
+    disconnect(&store, nullptr, this, nullptr);
+    client.stop();
 }
