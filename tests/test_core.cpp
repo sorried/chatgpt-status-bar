@@ -87,6 +87,33 @@ class CoreTests : public QObject {
         QCOMPARE(store.sessions()["a"].state, State::Waiting);
         QVERIFY(store.sessions()["a"].detail.contains("+new line"));
     }
+    void planAndHistoryFollowServerEvents() {
+        SessionStore store;
+        store.ingestRpc(rpc("turn/started", {{"threadId", "a"}, {"turn", QJsonObject{{"id", "t"}}}}));
+        store.ingestRpc(rpc("turn/plan/updated",
+                            {{"threadId", "a"},
+                             {"plan", QJsonArray{QJsonObject{{"step", "inspect"}, {"status", "completed"}},
+                                                 QJsonObject{{"step", "test"}, {"status", "inProgress"}}}}}));
+        QCOMPARE(store.sessions()["a"].plan.size(), 2);
+        QCOMPARE(store.sessions()["a"].plan[1].second, "inProgress");
+        for (int i = 0; i < 8; ++i)
+            store.ingestRpc(rpc("item/started", {{"threadId", "a"},
+                                                 {"item", QJsonObject{{"type", "commandExecution"},
+                                                                      {"command", QString::number(i)}}}}));
+        QCOMPARE(store.sessions()["a"].history.size(), 4);
+        QCOMPARE(store.sessions()["a"].history.first(), "6");
+        store.ingestRpc(rpc(
+            "item/completed",
+            {{"threadId", "a"},
+             {"item",
+              QJsonObject{{"type", "collabAgentToolCall"},
+                          {"agentsStates", QJsonObject{{"child", QJsonObject{{"status", "running"}}}}}}}}));
+        QCOMPARE(store.sessions()["a"].agents["child"], "running");
+        store.ingestRpc(rpc("turn/started", {{"threadId", "a"}, {"turn", QJsonObject{{"id", "next"}}}}));
+        QVERIFY(store.sessions()["a"].plan.isEmpty());
+        QVERIFY(store.sessions()["a"].history.isEmpty());
+        QVERIFY(store.sessions()["a"].agents.isEmpty());
+    }
     void staleIsUnknown() {
         SessionStore store;
         store.ingestLog("a", logEvent("event_msg", {{"type", "task_started"}},

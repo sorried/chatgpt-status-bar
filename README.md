@@ -15,7 +15,7 @@ a desktop status companion for OpenAI Codex. see when your agent is working, wai
 
 ## what it does
 
-- shows a floating status panel and a system tray icon. click either to open session details.
+- shows a floating status panel and a system tray icon. hover over the panel for the activity card. click to pin it, and use the close button to dismiss it.
 - observes recent Codex sessions automatically, including terminal and desktop sessions that write local rollout files.
 - shows the project, latest activity, elapsed turn time, model and reported token totals. waiting and active sessions take priority in the panel.
 - connects to `codex app-server` using your existing Codex login. launch a task in a project, allow or deny individual actions, answer questions and stop a task.
@@ -24,11 +24,11 @@ a desktop status companion for OpenAI Codex. see when your agent is working, wai
 
 written in C++17 with Qt 6 Widgets. native desktop executables for Linux, Windows and macOS, without Electron or a webview. the floating panel works on screens with or without a hardware notch.
 
-<img src="docs/screenshots/en/monitor.png" width="840" alt="Session monitor with an explicitly labelled sample session">
+<img src="docs/screenshots/en/monitor.png" width="440" alt="Session card with an explicitly labelled sample session">
 
 ## get a build
 
-download [v0.2.0](https://github.com/sorried/chatgpt-status-bar/releases/tag/v0.2.0) with its `.sha256` checksum. alternatively, open [desktop builds](https://github.com/sorried/chatgpt-status-bar/actions/workflows/build.yml), select a successful run and download its artifact. GitHub requires signing in to download workflow artifacts. unpack the whole archive so the Qt libraries stay beside the application.
+download [v0.3.0](https://github.com/sorried/chatgpt-status-bar/releases/tag/v0.3.0) with its `.sha256` checksum. alternatively, open [desktop builds](https://github.com/sorried/chatgpt-status-bar/actions/workflows/build.yml), select a successful run and download its artifact. GitHub requires signing in to download workflow artifacts. unpack the whole archive so the Qt libraries stay beside the application.
 
 | build | launch |
 | --- | --- |
@@ -55,13 +55,15 @@ it installs under `~/.local`, adds a launcher, verifies SHA-256 and preserves ex
 
 observed sessions keep their approval prompts in their original Codex client. tasks launched here can be approved here. new tasks request the `untrusted` approval policy and `workspace-write` isolation. local Codex policy can impose additional restrictions. the app never automatically approves requests or enables unrestricted execution.
 
-closing the monitor leaves it running in the tray and floating panel. use **quit** in the window or tray menu to exit. quitting stops this application's Codex server; finish or stop its running tasks first. start at login refers to this application's current path, so turn it off before moving or removing the app.
+the app starts as the compact status panel and tray icon. the activity card stays hidden until hovered or clicked. closing the card leaves it running. use **quit** in the window or tray menu to exit. quitting stops this application's Codex server; finish or stop its running tasks first. start at login refers to this application's current path, so turn it off before moving or removing the app.
 
 ## appearance and settings
 
 the settings window uses a glass-style sidebar and grouped controls inspired by Apple's Liquid Glass design. light and dark themes, live appearance previews and reduced transparency are available. the material is drawn in Qt; desktop background blur depends on the compositor.
 
-the compact black panel shows the ChatGPT logo, current status and elapsed time. hover to reveal the task, project and latest activity. click to open the full monitor. the logo stays unchanged; a separate indicator shows activity. animation can be switched off.
+the activity card follows the compact notch interaction: task, current action, reported plan, recent activity and other sessions. approvals for tasks launched here appear inside the same card. plan and agent information is shown only when reported by Codex.
+
+the compact black panel shows the ChatGPT logo, current status and elapsed time. hover to reveal the task, project and latest activity. click to pin the activity card. the logo stays unchanged; a separate indicator shows activity. animation can be switched off.
 
 <img src="docs/screenshots/en/hover.png" width="360" alt="Task details shown on hover">
 <img src="docs/screenshots/en/appearance.png" width="840" alt="Appearance settings with a ChatGPT logo preview">

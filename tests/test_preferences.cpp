@@ -28,7 +28,7 @@ class PreferencesTests : public QObject {
         QVERIFY(directory.isValid());
         QCoreApplication::setOrganizationName("status-bar-tests");
         QCoreApplication::setApplicationName("preferences");
-        QCoreApplication::setApplicationVersion("0.2.0");
+        QCoreApplication::setApplicationVersion("0.3.0");
         QSettings::setDefaultFormat(QSettings::IniFormat);
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, directory.path());
         qApp->setQuitOnLastWindowClosed(false);
@@ -41,6 +41,31 @@ class PreferencesTests : public QObject {
         settings.setValue("theme", "dark");
         settings.setValue("motion", false);
         settings.sync();
+    }
+    void activityIsCompactAndApprovalsAreInline() {
+        App window(true);
+        window.show();
+        QApplication::processEvents();
+        QVERIFY(window.width() <= 480);
+        QVERIFY(window.height() < 700);
+        auto *client = window.findChild<CodexClient *>("codexClient");
+        QVERIFY(client);
+        client->receive({{"method", "item/commandExecution/requestApproval"},
+                         {"id", "approval-test"},
+                         {"params", QJsonObject{{"threadId", "example"},
+                                                {"turnId", "t"},
+                                                {"command", "echo safe"},
+                                                {"reason", "test request"}}}});
+        auto *approval = window.findChild<QWidget *>("approvalSection");
+        QTRY_VERIFY(approval->isVisible());
+        QVERIFY(window.findChild<QTextEdit *>("approvalDetail")->toPlainText().contains("echo safe"));
+        QVERIFY(window.findChild<QPushButton *>("denyButton"));
+        QVERIFY(!window.findChild<QPushButton *>("allowButton")->isEnabled());
+        client->receive({{"method", "serverRequest/resolved"},
+                         {"params", QJsonObject{{"threadId", "example"}, {"requestId", "approval-test"}}}});
+        QTRY_VERIFY(!approval->isVisible());
+        QTest::mouseClick(window.findChild<QPushButton *>("closeCardButton"), Qt::LeftButton);
+        QVERIFY(!window.isVisible());
     }
     void navigationAndLayout_data() {
         QTest::addColumn<QString>("language");

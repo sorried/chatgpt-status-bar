@@ -4,10 +4,14 @@
 #include <QMap>
 #include <QObject>
 #include <QSet>
+#include <QStringList>
 
 enum class State { Idle, Working, Thinking, Tool, Waiting, Done, Error, Unknown };
 struct Session {
     QString id, cwd, title, detail, model, turnId;
+    QStringList history;
+    QList<QPair<QString, QString>> plan;
+    QMap<QString, QString> agents;
     State state = State::Idle;
     QDateTime updated, started;
     qint64 tokens = 0;

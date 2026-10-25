@@ -1,4 +1,5 @@
 #pragma once
+#include "activity.h"
 #include "codex.h"
 #include "mascot.h"
 #include "watcher.h"
@@ -18,13 +19,15 @@ class Companion : public QWidget {
     Mascot *mascot;
     QLabel *label;
     QLabel *status;
-    QWidget *card;
-    QLabel *cardTitle, *cardTask, *cardDetail;
+    QWidget *card = nullptr;
+    bool pinned = false;
+    void setCard(QWidget *widget);
     bool hoverEnabled = true;
     void showDetails();
     void place(int screen, const QString &position);
   signals:
     void activated();
+    void inspecting();
 
   protected:
     void paintEvent(QPaintEvent *) override;
@@ -66,6 +69,10 @@ class App : public QMainWindow {
     QString home() const;
     QString stateName(State state) const;
     QString selected() const;
+    ActivityUi activity;
+    QJsonObject activeRequest;
+    void finishApproval(bool allow);
+    void clearApproval();
     void refresh();
     void showWindow();
     void requestQuit();

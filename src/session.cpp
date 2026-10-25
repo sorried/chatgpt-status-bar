@@ -1,6 +1,25 @@
 #include "session.h"
 #include <QJsonArray>
+#include <QJsonDocument>
 
+static void remember(Session &session, const QString &text) {
+    const auto entry = text.simplified().left(240);
+    if (entry.isEmpty() || (!session.history.isEmpty() && session.history.first() == entry))
+        return;
+    session.history.prepend(entry);
+    while (session.history.size() > 4)
+        session.history.removeLast();
+}
+static void updatePlan(Session &session, const QJsonArray &plan) {
+    session.plan.clear();
+    for (const auto &value : plan) {
+        const auto step = value.toObject();
+        if (!step["step"].toString().isEmpty())
+            session.plan.append({step["step"].toString().left(220), step["status"].toString()});
+        if (session.plan.size() >= 12)
+            break;
+    }
+}
 void SessionStore::finish(Session &s, State before) {
     if (batching) {
         if (!beforeBatch.contains(s.id))
@@ -40,6 +59,9 @@ void SessionStore::ingestLog(const QString &key, const QJsonObject &e) {
         if (kind == "task_started" || kind == "turn_started" || kind == "user_message") {
             s.state = State::Working;
             s.started = time;
+            s.history.clear();
+            s.plan.clear();
+            s.agents.clear();
             if (kind == "user_message")
                 s.title = p["message"].toString().simplified().left(180);
         } else if (kind == "agent_reasoning") {
@@ -76,8 +98,13 @@ void SessionStore::ingestLog(const QString &key, const QJsonObject &e) {
         } else if (kind == "reasoning") {
             s.state = State::Thinking;
         } else if (kind == "function_call" || kind == "custom_tool_call") {
+            remember(s, s.detail);
             s.state = State::Tool;
-            s.detail = p["name"].toString();
+            const auto name = p["name"].toString();
+            const auto args = QJsonDocument::fromJson(p["arguments"].toString().toUtf8()).object();
+            s.detail = args["cmd"].toString(args["command"].toString(name)).left(4000);
+            if (name == "update_plan")
+                updatePlan(s, args["plan"].toArray());
         } else if (kind == "function_call_output" || kind == "custom_tool_call_output") {
             s.state = State::Working;
         }
@@ -108,13 +135,19 @@ void SessionStore::ingestRpc(const QJsonObject &e) {
         s.state = State::Working;
         s.started = s.updated;
         s.turnId = turn["id"].toString();
+        s.history.clear();
+        s.plan.clear();
+        s.agents.clear();
     } else if (method == "turn/completed") {
         const auto status = turn["status"].toString();
         s.state = status == "failed" ? State::Error : status == "interrupted" ? State::Idle : State::Done;
         const auto error = turn["error"].toObject()["message"].toString();
         if (!error.isEmpty())
             s.detail = error.left(4000);
+    } else if (method == "turn/plan/updated") {
+        updatePlan(s, p["plan"].toArray());
     } else if (method == "item/started") {
+        remember(s, s.detail);
         const auto type = item["type"].toString();
         s.state = type == "reasoning"                                  ? State::Thinking
                   : type == "commandExecution" || type == "fileChange" ? State::Tool
@@ -133,6 +166,11 @@ void SessionStore::ingestRpc(const QJsonObject &e) {
         } else
             s.detail = item["command"].toString(type).left(4000);
     } else if (method == "item/completed") {
+        if (item["type"] == "collabAgentToolCall") {
+            const auto states = item["agentsStates"].toObject();
+            for (auto it = states.begin(); it != states.end(); ++it)
+                s.agents[it.key()] = it.value().toObject()["status"].toString();
+        }
         if (item["type"] == "agentMessage")
             s.detail = item["text"].toString().left(4000);
         s.state = State::Working;

@@ -11,7 +11,7 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     QCoreApplication::setOrganizationName("sorried");
     QCoreApplication::setApplicationName("gpt-status-bar");
-    QCoreApplication::setApplicationVersion("0.2.0");
+    QCoreApplication::setApplicationVersion("0.3.0");
     app.setQuitOnLastWindowClosed(false);
     QCommandLineParser parser;
     parser.setApplicationDescription("Native desktop companion for OpenAI Codex");
@@ -45,7 +45,7 @@ int main(int argc, char *argv[]) {
         return 0;
     }
     App window(preview);
-    if (!parser.isSet("background") || preview)
+    if (preview)
         window.show();
     if (parser.isSet("settings"))
         QTimer::singleShot(0, &window, [&] { window.openSettings(); });

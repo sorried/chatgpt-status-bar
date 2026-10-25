@@ -52,26 +52,6 @@ Companion::Companion(QWidget *parent) : QWidget(parent) {
     layout->addWidget(mascot);
     layout->addWidget(status, 1);
     layout->addWidget(label);
-    card = new QWidget(this, Qt::Tool | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
-    card->setWindowTitle("Codex activity");
-    card->setCursor(Qt::PointingHandCursor);
-    card->installEventFilter(this);
-    card->setFixedWidth(360);
-    card->setStyleSheet(
-        "QWidget { background: #090909; color: #f1f1f1; } QLabel { background: transparent; padding: 0; }");
-    auto *details = new QVBoxLayout(card);
-    details->setContentsMargins(20, 18, 20, 18);
-    details->setSpacing(10);
-    cardTitle = new QLabel;
-    cardTask = new QLabel;
-    cardDetail = new QLabel;
-    cardTitle->setStyleSheet("font-weight: 600; font-size: 14px;");
-    cardDetail->setStyleSheet("color: #b8b8b8; font-size: 12px;");
-    for (auto *text : {cardTitle, cardTask, cardDetail}) {
-        text->setTextFormat(Qt::PlainText);
-        text->setWordWrap(true);
-        details->addWidget(text);
-    }
 }
 void Companion::paintEvent(QPaintEvent *) {
     QPainter p(this);
@@ -89,38 +69,40 @@ void Companion::enterEvent(QEnterEvent *e) {
     if (hoverEnabled)
         showDetails();
 }
+void Companion::setCard(QWidget *widget) {
+    card = widget;
+    card->installEventFilter(this);
+}
 void Companion::leaveEvent(QEvent *e) {
     QWidget::leaveEvent(e);
-    QTimer::singleShot(180, card, [this] {
-        if (!underMouse() && !card->underMouse())
+    QTimer::singleShot(230, this, [this] {
+        if (card && !pinned && !QApplication::activeModalWidget() && !underMouse() && !card->underMouse())
             card->hide();
     });
 }
 bool Companion::eventFilter(QObject *object, QEvent *event) {
     if (object == card && event->type() == QEvent::Leave)
-        QTimer::singleShot(180, card, [this] {
-            if (!underMouse() && !card->underMouse())
+        QTimer::singleShot(230, this, [this] {
+            if (card && !pinned && !QApplication::activeModalWidget() && !underMouse() && !card->underMouse())
                 card->hide();
         });
-    if (object == card && event->type() == QEvent::MouseButtonRelease) {
-        if (static_cast<QMouseEvent *>(event)->button() == Qt::LeftButton) {
-            card->hide();
-            emit activated();
-        }
-    }
     return QWidget::eventFilter(object, event);
 }
 void Companion::showDetails() {
+    if (!card)
+        return;
+    if (!pinned)
+        emit inspecting();
     card->adjustSize();
     auto *screen = QGuiApplication::screenAt(geometry().center());
     if (!screen)
         return;
     const auto area = screen->availableGeometry();
-    const int x =
-        qBound(area.left(), geometry().center().x() - card->width() / 2, area.right() - card->width() + 1);
+    const int x = qBound(area.left(), geometry().center().x() - card->width() / 2,
+                         qMax(area.left(), area.right() - card->width() + 1));
     const int y = geometry().bottom() + card->height() + 8 < area.bottom()
                       ? geometry().bottom() + 5
-                      : geometry().top() - card->height() - 5;
+                      : qMax(area.top(), geometry().top() - card->height() - 5);
     card->move(x, y);
     card->show();
 }
@@ -168,72 +150,34 @@ QString App::stateName(State state) const {
 App::App(bool preview) : watcher(&store), preview(preview) {
     setObjectName("mainWindow");
     setWindowIcon(Mascot::icon());
-    resize(840, 620);
-    setMinimumSize(680, 480);
-    auto *body = new QWidget;
-    auto *layout = new QVBoxLayout(body);
-    layout->setContentsMargins(24, 20, 24, 20);
-    layout->setSpacing(16);
-    auto *head = new QHBoxLayout;
-    avatar = new Mascot;
-    avatar->setFixedSize(72, 72);
-    auto *titles = new QVBoxLayout;
-    auto *name = new QLabel("GPT status bar");
-    name->setStyleSheet("font-size: 23px; font-weight: 600;");
-    summary = new QLabel;
-    titles->addWidget(name);
-    titles->addWidget(summary);
-    auto *prefs = new QPushButton;
-    prefs->setObjectName("settingsButton");
-    connect(prefs, &QPushButton::clicked, this, &App::openSettings);
-    head->addWidget(avatar);
-    head->addLayout(titles, 1);
-    head->addWidget(prefs);
-    layout->addLayout(head);
-    connection = new QLabel;
-    connection->setTextFormat(Qt::PlainText);
-    connection->setWordWrap(true);
-    layout->addWidget(connection);
-    auto *split = new QSplitter;
-    list = new QListWidget;
-    list->setMinimumWidth(220);
-    list->setAccessibleName(l("Codex sessions", "сессии Codex"));
-    split->addWidget(list);
-    auto *right = new QWidget;
-    auto *rightLayout = new QVBoxLayout(right);
-    rightLayout->setContentsMargins(16, 0, 0, 0);
-    meta = new QLabel;
-    meta->setTextFormat(Qt::PlainText);
-    meta->setWordWrap(true);
-    meta->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    detail = new QTextEdit;
-    detail->setReadOnly(true);
-    detail->setAcceptRichText(false);
-    detail->setAccessibleName(l("Session activity", "активность сессии"));
-    rightLayout->addWidget(meta);
-    rightLayout->addWidget(detail, 1);
-    split->addWidget(right);
-    split->setStretchFactor(1, 2);
-    layout->addWidget(split, 1);
-    usage = new QLabel;
-    usage->setWordWrap(true);
-    layout->addWidget(usage);
-    auto *actions = new QHBoxLayout;
-    connectButton = new QPushButton;
-    taskButton = new QPushButton;
-    stopButton = new QPushButton;
-    folderButton = new QPushButton;
-    actions->addWidget(connectButton);
-    actions->addWidget(taskButton);
-    actions->addStretch();
-    actions->addWidget(folderButton);
-    actions->addWidget(stopButton);
-    auto *quitButton = new QPushButton;
-    quitButton->setObjectName("quitButton");
-    connect(quitButton, &QPushButton::clicked, this, &App::requestQuit);
-    actions->addWidget(quitButton);
-    layout->addLayout(actions);
-    setCentralWidget(body);
+    setWindowFlags(Qt::Tool | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
+    setAttribute(Qt::WA_TranslucentBackground);
+    setAttribute(Qt::WA_ShowWithoutActivating);
+    setFixedWidth(440);
+    activity = createActivityUi(this);
+    setCentralWidget(activity.body);
+    avatar = activity.avatar;
+    summary = activity.summary;
+    connection = activity.connection;
+    meta = activity.meta;
+    usage = activity.usage;
+    list = activity.list;
+    detail = activity.detail;
+    connectButton = activity.connectButton;
+    taskButton = activity.taskButton;
+    stopButton = activity.stopButton;
+    folderButton = activity.folderButton;
+    connect(activity.settingsButton, &QPushButton::clicked, this, &App::openSettings);
+    connect(activity.quitButton, &QPushButton::clicked, this, &App::requestQuit);
+    connect(activity.closeButton, &QPushButton::clicked, this, [this] {
+        companion.pinned = false;
+        hide();
+    });
+    connect(activity.allowButton, &QPushButton::clicked, this, [this] { finishApproval(true); });
+    connect(activity.denyButton, &QPushButton::clicked, this, [this] { finishApproval(false); });
+    companion.setCard(this);
+    client.setObjectName("codexClient");
+    client.setParent(this);
     connect(list, &QListWidget::currentRowChanged, this, &App::refresh);
     connect(&store, &SessionStore::changed, this, &App::refresh);
     connect(&store, &SessionStore::transitioned, this, &App::notify);
@@ -241,6 +185,12 @@ App::App(bool preview) : watcher(&store), preview(preview) {
     connect(&client, &CodexClient::event, &store, &SessionStore::ingestRpc);
     connect(&client, &CodexClient::event, this, [this](const QJsonObject &e) {
         const auto p = e["params"].toObject();
+        if (!activeRequest.isEmpty()) {
+            const auto params = activeRequest["params"].toObject();
+            if ((e["method"] == "serverRequest/resolved" && p["requestId"] == activeRequest["id"]) ||
+                (e["method"] == "turn/completed" && p["threadId"] == params["threadId"]))
+                clearApproval();
+        }
         for (auto it = requests.begin(); it != requests.end();) {
             const auto params = (*it)["params"].toObject();
             if ((e["method"] == "serverRequest/resolved" && p["requestId"] == (*it)["id"]) ||
@@ -253,6 +203,7 @@ App::App(bool preview) : watcher(&store), preview(preview) {
     connect(&client, &CodexClient::connectionChanged, this, [this](bool ready) {
         if (!ready) {
             requests.clear();
+            clearApproval();
             for (const auto &s : store.sessions()) {
                 if (s.managed && s.state != State::Done && s.state != State::Idle)
                     store.ingestRpc(
@@ -300,6 +251,10 @@ App::App(bool preview) : watcher(&store), preview(preview) {
         if (QFileInfo(cwd).isDir())
             QDesktopServices::openUrl(QUrl::fromLocalFile(cwd));
     });
+    connect(&companion, &Companion::inspecting, this, [this] {
+        if (list->count())
+            list->setCurrentRow(0);
+    });
     connect(&companion, &Companion::activated, this, [this] {
         if (list->count())
             list->setCurrentRow(0);
@@ -317,6 +272,11 @@ App::App(bool preview) : watcher(&store), preview(preview) {
     limitTimer.start();
     auto *shortcut = new QShortcut(QKeySequence::Preferences, this);
     connect(shortcut, &QShortcut::activated, this, &App::openSettings);
+    auto *escape = new QShortcut(QKeySequence(Qt::Key_Escape), this);
+    connect(escape, &QShortcut::activated, this, [this] {
+        companion.pinned = false;
+        hide();
+    });
     applySettings();
     if (!preview)
         watcher.setHome(home());
@@ -334,6 +294,18 @@ App::App(bool preview) : watcher(&store), preview(preview) {
         store.ingestLog("preview-session", {{"type", "response_item"},
                                             {"payload", QJsonObject{{"type", "function_call"},
                                                                     {"name", "cmake --build build"}}}});
+    }
+    if (preview) {
+        store.ingestRpc(
+            {{"method", "turn/plan/updated"},
+             {"params",
+              QJsonObject{
+                  {"threadId", "preview-session"},
+                  {"plan",
+                   QJsonArray{QJsonObject{{"step", l("Prepare the settings", "подготовить настройки")},
+                                          {"status", "completed"}},
+                              QJsonObject{{"step", l("Build and check", "собрать и проверить")},
+                                          {"status", "inProgress"}}}}}}});
     }
     booting = false;
     refresh();
@@ -373,7 +345,7 @@ void App::refresh() {
         item->setText((project.isEmpty() ? l("Codex session", "сессия Codex") : project) + "\n" +
                       stateName(s.state));
         item->setData(Qt::UserRole, s.id);
-        item->setSizeHint(QSize(210, 62));
+        item->setSizeHint(QSize(380, 44));
         list->addItem(item);
         if (s.id == previous)
             selectedRow = list->count() - 1;
@@ -382,39 +354,59 @@ void App::refresh() {
         list->setCurrentRow(selectedRow >= 0 ? selectedRow : 0);
     list->verticalScrollBar()->setValue(scroll);
     list->blockSignals(false);
-    summary->setText(
-        sessions.isEmpty()
-            ? l("Your agent, at a glance.", "твой агент одним взглядом.")
-            : l("%1 active · %2 sessions", "активных: %1 · сессий: %2").arg(active).arg(sessions.size()));
+    const bool approving = !activeRequest.isEmpty();
+    activity.taskLabel->setVisible(!approving);
+    meta->setVisible(!approving);
+    activity.stateLabel->setVisible(!approving);
+    detail->setVisible(!approving);
+    list->setVisible(sessions.size() > 1 && !approving);
+    list->setFixedHeight(qMin(3, int(sessions.size())) * 44 + 6);
     const auto s = store.sessions().value(selected());
     QString duration;
     if (s.started.isValid()) {
-        const qint64 seconds =
-            qMax<qint64>(0, s.started.secsTo(s.state == State::Done || s.state == State::Idle ||
-                                                     s.state == State::Unknown || s.state == State::Error
-                                                 ? s.updated
-                                                 : QDateTime::currentDateTimeUtc()));
+        const auto end = s.state == State::Done || s.state == State::Idle || s.state == State::Unknown ||
+                                 s.state == State::Error
+                             ? s.updated
+                             : QDateTime::currentDateTimeUtc();
+        const auto seconds = qMax<qint64>(0, s.started.secsTo(end));
         duration = QString("%1:%2").arg(seconds / 60).arg(seconds % 60, 2, 10, QChar('0'));
     }
-    if (sessions.isEmpty()) {
-        meta->setText(l("No sessions yet", "пока нет сессий"));
-        detail->setPlainText(
-            l("Open Codex in a project. Recent local sessions will appear here automatically.\n\nConnect to "
-              "Codex to launch a task and answer its approval requests here.",
-              "открой Codex в проекте. свежие локальные сессии появятся здесь автоматически.\n\nподключись к "
-              "Codex, чтобы запустить задачу и отвечать на её запросы здесь."));
-    } else {
-        meta->setText(
-            s.title + "\n" + s.cwd + "\n" + stateName(s.state) + "  " + duration +
-            (s.model.isEmpty() ? "" : "  ·  " + s.model) +
-            (s.tokens ? l("\n%1 total tokens", "\nвсего токенов: %1").arg(s.tokens) : "") +
-            (s.context ? l(" · context capacity %1", " · ёмкость контекста %1").arg(s.context) : "") + "\n" +
-            (s.managed ? l("controlled here", "управляется здесь")
-                       : l("observed session · approvals stay in Codex",
-                           "наблюдаемая сессия · разрешения в Codex")));
-        if (detail->toPlainText() != s.detail)
-            detail->setPlainText(s.detail);
+    summary->setText((active > 1 ? QString("%1 · ").arg(active) : QString()) +
+                     (duration.isEmpty() ? stateName(s.state) : duration));
+    activity.taskLabel->setText(l("task", "задача"));
+    activity.stateLabel->setText(stateName(s.state));
+    meta->setText(sessions.isEmpty()  ? l("No active task", "нет активной задачи")
+                  : s.title.isEmpty() ? QFileInfo(s.cwd).fileName()
+                                      : s.title);
+    const auto text = sessions.isEmpty()
+                          ? l("Open Codex in a project. Its activity appears here automatically.",
+                              "открой Codex в проекте. его действия появятся здесь автоматически.")
+                          : s.detail;
+    if (detail->toPlainText() != text)
+        detail->setPlainText(text);
+    detail->document()->setTextWidth(390);
+    detail->setFixedHeight(qBound(32, int(detail->document()->size().height()) + 8, 92));
+    QStringList plan;
+    for (const auto &step : s.plan.mid(0, 3)) {
+        const auto marker = step.second == "completed"    ? QString("✓ ")
+                            : step.second == "inProgress" ? QString("› ")
+                                                          : QString("· ");
+        plan.append(marker + step.first.left(110));
     }
+    activity.planLabel->setText(plan.isEmpty() ? QString() : l("plan\n", "план\n") + plan.join('\n'));
+    activity.planLabel->setVisible(!plan.isEmpty() && !approving);
+    QStringList recent;
+    int agents = 0;
+    for (auto it = s.agents.begin(); it != s.agents.end(); ++it)
+        if (it.value() == "running" || it.value() == "pendingInit")
+            ++agents;
+    if (agents)
+        recent.append(l("%1 agents working", "работают агентов: %1").arg(agents));
+    for (const auto &entry : s.history.mid(0, 2))
+        recent.append(entry.left(120));
+    activity.historyLabel->setText(recent.isEmpty() ? QString()
+                                                    : l("recently\n", "до этого\n") + recent.join('\n'));
+    activity.historyLabel->setVisible(!recent.isEmpty() && !approving);
     const bool motion = settings.value("motion", true).toBool();
     const auto state = sessions.isEmpty() ? State::Idle : s.state;
     avatar->configure(state, motion);
@@ -433,10 +425,6 @@ void App::refresh() {
                              : "GPT";
     companion.label->setText(elapsed);
     companion.status->setText(stateName(primary.state) + (active > 1 ? QString(" · %1").arg(active) : ""));
-    companion.cardTitle->setText("Codex · " + stateName(primary.state));
-    companion.cardTask->setText(primary.title.isEmpty() ? l("No active task", "нет активной задачи")
-                                                        : primary.title.left(220));
-    companion.cardDetail->setText(QFileInfo(primary.cwd).fileName() + "\n" + primary.detail.left(280));
     tray.setIcon(Mascot::icon(primary.state));
     tray.setToolTip("GPT · " + stateName(primary.state));
     QString status = client.connected() ? l("Codex connected", "Codex подключён")
@@ -451,18 +439,24 @@ void App::refresh() {
                     " · папка сессий не найдена. проверь настройки.");
     else if (watcher.status() == "unreadable")
         status += l(" · a session file could not be read", " · не удалось прочитать файл сессии");
+    if (!preview && !s.id.isEmpty() && !s.managed)
+        status += l(" · approvals in Codex", " · разрешения в Codex");
     connection->setText(status);
     connectButton->setText(client.connected() ? l("Refresh limits", "обновить лимиты")
                                               : l("Connect Codex", "подключить Codex"));
     taskButton->setText(l("New task", "новая задача"));
     taskButton->setEnabled(client.connected() && !preview);
+    taskButton->setVisible(client.connected() && !preview);
     connectButton->setEnabled(!preview);
+    connectButton->setVisible(!preview);
     stopButton->setText(l("Stop task", "остановить"));
     stopButton->setEnabled(s.managed && !s.turnId.isEmpty() && client.connected() &&
                            (s.state == State::Working || s.state == State::Thinking ||
                             s.state == State::Tool || s.state == State::Waiting));
     folderButton->setText(l("Open folder", "открыть папку"));
     folderButton->setEnabled(!s.cwd.isEmpty() && QFileInfo(s.cwd).isDir());
+    folderButton->setVisible(folderButton->isEnabled());
+    stopButton->setVisible(stopButton->isEnabled());
     QStringList windows;
     auto limits = rateLimits["rateLimitsByLimitId"].toObject();
     if (limits.isEmpty() && rateLimits["rateLimits"].isObject())
@@ -488,42 +482,40 @@ void App::refresh() {
             windows.append(text);
         }
     }
-    usage->setText(windows.isEmpty()
-                       ? l("Limits unavailable. Connect with your existing Codex login to check.",
-                           "лимиты недоступны. подключись с существующим входом Codex для проверки.")
-                       : windows.join('\n'));
+    QStringList footer;
+    if (!s.cwd.isEmpty())
+        footer.append(QFileInfo(s.cwd).fileName());
+    if (!s.model.isEmpty())
+        footer.append(s.model);
+    if (s.tokens)
+        footer.append(l("%1 tokens", "токенов: %1").arg(s.tokens));
+    if (s.context)
+        footer.append(l("capacity %1", "ёмкость %1").arg(s.context));
+    if (!windows.isEmpty())
+        footer += windows;
+    usage->setText(footer.join(" · "));
+    usage->setVisible(!footer.isEmpty());
+    adjustSize();
 }
 void App::showWindow() {
+    companion.pinned = true;
+    companion.showDetails();
     showNormal();
     raise();
     activateWindow();
 }
 void App::applySettings() {
     setWindowTitle(l("GPT status bar", "GPT status bar"));
-    findChild<QPushButton *>("settingsButton")->setText(l("Settings", "настройки"));
-    findChild<QPushButton *>("quitButton")->setText(l("Quit", "выйти"));
-    const QString theme = settings.value("theme", "system").toString();
-    const bool dark =
-        theme == "dark" || (theme == "system" && qApp->palette().color(QPalette::Window).lightness() < 128);
-    if (theme == "system")
-        setStyleSheet({});
-    else {
-        const QString bg = dark ? "#111111" : "#f7f7f7";
-        const QString fg = dark ? "#eeeeee" : "#171717";
-        const QString field = dark ? "#191919" : "#ffffff";
-        const QString border = dark ? "#444444" : "#aaaaaa";
-        setStyleSheet(
-            QString("QWidget { background: %1; color: %2; } QListWidget, QTextEdit, QLineEdit, QComboBox, "
-                    "QSpinBox { background: %3; border: 1px solid %4; border-radius: 6px; padding: 7px; } "
-                    "QPushButton { background: %3; border: 1px solid %4; border-radius: 6px; padding: 8px "
-                    "12px; } QPushButton:hover { border-color: #8e8e8e; } QPushButton:focus { border: 2px "
-                    "solid #8e8e8e; } QPushButton:disabled { color: %4; } QListWidget::item { padding: 5px; "
-                    "} QListWidget::item:selected { background: %4; color: %2; } QToolTip { background: %3; "
-                    "color: %2; border: 1px solid %4; }")
-                .arg(bg, fg, field, border));
-    }
+    activity.settingsButton->setToolTip(l("settings", "настройки"));
+    activity.settingsButton->setAccessibleName(l("settings", "настройки"));
+    activity.closeButton->setToolTip(l("hide card", "скрыть карточку"));
+    activity.closeButton->setAccessibleName(l("hide card", "скрыть карточку"));
+    activity.quitButton->setText(l("quit", "выйти"));
+    activity.allowButton->setText(l("allow once", "разрешить один раз"));
+    activity.denyButton->setText(l("deny", "отклонить"));
+    activity.quitButton->setVisible(preview || !QSystemTrayIcon::isSystemTrayAvailable());
     companion.hoverEnabled = settings.value("hover", true).toBool();
-    if (!companion.hoverEnabled)
+    if (!companion.hoverEnabled && !companion.pinned)
         companion.card->hide();
     companion.place(settings.value("screen", 0).toInt(), settings.value("position", "top").toString());
     companion.setVisible(settings.value("companion", true).toBool() ||
@@ -590,43 +582,30 @@ void App::handleRequests() {
     const auto params = message["params"].toObject();
     const auto id = message["id"];
     if (method == "item/commandExecution/requestApproval" || method == "item/fileChange/requestApproval") {
-        showWindow();
-        QMessageBox box(QMessageBox::Question, l("Codex needs permission", "Codex запрашивает разрешение"),
-                        QString(), QMessageBox::NoButton, this);
-        box.setTextFormat(Qt::PlainText);
-        box.setText(params["reason"].toString(
-            l("Review this action before allowing it.", "проверь действие перед разрешением.")));
+        activeRequest = message;
+        for (int i = 0; i < list->count(); ++i)
+            if (list->item(i)->data(Qt::UserRole).toString() == params["threadId"].toString()) {
+                list->setCurrentRow(i);
+                break;
+            }
         const auto session = store.sessions().value(params["threadId"].toString());
-        box.setInformativeText(params["cwd"].toString(session.cwd) + "\n" + params["command"].toString() +
-                               (params["networkApprovalContext"].isObject()
-                                    ? "\n" + params["networkApprovalContext"].toObject()["host"].toString()
-                                    : ""));
-        if (method == "item/fileChange/requestApproval") {
-            box.setDetailedText(message["_detail"].toString() + "\n" + params["grantRoot"].toString());
-            box.setInformativeText(
-                session.cwd + "\n" +
-                l("Review the file changes in Show Details.", "проверь изменения файлов в подробностях."));
-        }
-        auto *allow = box.addButton(l("Allow once", "разрешить один раз"), QMessageBox::AcceptRole);
+        QString text = params["cwd"].toString(session.cwd) + "\n" + params["reason"].toString() + "\n" +
+                       params["command"].toString();
+        if (method == "item/fileChange/requestApproval")
+            text += "\n" + message["_detail"].toString() + "\n" + params["grantRoot"].toString();
+        if (params["networkApprovalContext"].isObject())
+            text += "\n" + params["networkApprovalContext"].toObject()["host"].toString();
+        activity.approvalTitle->setText(l("allow this action?", "разрешить это действие?"));
+        activity.approvalDetail->setPlainText(text.trimmed());
         const auto decisions = params["availableDecisions"].toArray();
-        if (!decisions.isEmpty() && !decisions.contains("accept"))
-            allow->setEnabled(false);
-        auto *deny = box.addButton(l("Deny", "отклонить"), QMessageBox::RejectRole);
-        box.setDefaultButton(deny);
-        box.setEscapeButton(deny);
-        connect(&client, &CodexClient::event, &box, [&](const QJsonObject &e) {
-            const auto p = e["params"].toObject();
-            if ((e["method"] == "serverRequest/resolved" && p["requestId"] == id) ||
-                (e["method"] == "turn/completed" && p["threadId"] == params["threadId"]))
-                box.reject();
-        });
-        connect(&client, &CodexClient::connectionChanged, &box, [&](bool ready) {
-            if (!ready)
-                box.reject();
-        });
-        box.exec();
-        if (client.connected())
-            client.answer(id, {{"decision", box.clickedButton() == allow ? "accept" : "decline"}});
+        activity.allowButton->setEnabled(client.connected() &&
+                                         (decisions.isEmpty() || decisions.contains("accept")));
+        activity.denyButton->setEnabled(client.connected());
+        activity.approvalSection->show();
+        refresh();
+        showWindow();
+        activity.denyButton->setFocus();
+        return;
     } else if (method == "item/tool/requestUserInput") {
         QDialog dialog(this);
         dialog.setWindowTitle(l("Codex has a question", "вопрос от Codex"));
@@ -762,6 +741,7 @@ bool App::hasActiveTasks() const {
 }
 void App::closeEvent(QCloseEvent *e) {
     if (!quitting) {
+        companion.pinned = false;
         hide();
         e->ignore();
     } else
@@ -808,4 +788,20 @@ void App::requestQuit() {
                                 "запущенные здесь задачи будут остановлены. выйти?")) != QMessageBox::Yes)
         return;
     shutdown();
+}
+
+void App::clearApproval() {
+    activeRequest = {};
+    activity.approvalSection->hide();
+    handlingRequest = false;
+    refresh();
+    QTimer::singleShot(0, this, &App::handleRequests);
+}
+void App::finishApproval(bool allow) {
+    if (activeRequest.isEmpty() || !client.connected())
+        return;
+    if (allow && !activity.allowButton->isEnabled())
+        return;
+    client.answer(activeRequest["id"], {{"decision", allow ? "accept" : "decline"}});
+    clearApproval();
 }
