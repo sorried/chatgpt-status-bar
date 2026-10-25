@@ -23,8 +23,10 @@ class Companion : public QWidget {
     bool pinned = false;
     void setCard(QWidget *widget);
     bool hoverEnabled = true;
+    bool notch = false;
     void showDetails();
     void place(int screen, const QString &position);
+    void setPanelStyle(bool notch, int width, int height);
   signals:
     void activated();
     void inspecting();
@@ -77,6 +79,7 @@ class App : public QMainWindow {
     void showWindow();
     void requestQuit();
     void applySettings();
+    void keepCompanionAbove();
     QDialog *settingsDialog();
     void newTask();
     void handleRequests();

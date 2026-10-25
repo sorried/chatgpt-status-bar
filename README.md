@@ -28,7 +28,7 @@ written in C++17 with Qt 6 Widgets. native desktop executables for Linux, Window
 
 ## get a build
 
-download [v0.3.0](https://github.com/sorried/chatgpt-status-bar/releases/tag/v0.3.0) with its `.sha256` checksum. alternatively, open [desktop builds](https://github.com/sorried/chatgpt-status-bar/actions/workflows/build.yml), select a successful run and download its artifact. GitHub requires signing in to download workflow artifacts. unpack the whole archive so the Qt libraries stay beside the application.
+download [v0.4.0](https://github.com/sorried/chatgpt-status-bar/releases/tag/v0.4.0) with its `.sha256` checksum. alternatively, open [desktop builds](https://github.com/sorried/chatgpt-status-bar/actions/workflows/build.yml), select a successful run and download its artifact. GitHub requires signing in to download workflow artifacts. unpack the whole archive so the Qt libraries stay beside the application.
 
 | build | launch |
 | --- | --- |
@@ -99,7 +99,7 @@ preview uses an isolated settings directory and synthetic data. it does not laun
 - after five minutes without an event, an observed running session is marked **no recent events**. a long silent command may still be running. this is not a completion signal.
 - log observation does not detect every permission wait. direct approval control requires a task launched through this application's server connection. unsupported server requests receive an explicit error.
 - account limits depend on your Codex login and server support. refresh errors are shown in the connection status.
-- on Wayland, window placement and always-on-top behavior depend on the compositor. this application uses a floating panel, not a hardware notch extension.
+- on Hyprland, the Linux panel is pinned above regular windows and across workspaces. other Wayland compositors control stacking and may ignore always-on-top requests. choose pill or notch shape and set panel width and height in Appearance settings. this is a software panel, not a hardware notch extension.
 - this monitors Codex, not browser ChatGPT conversations. it does not include ClaudeNotch's Telegram service, updater or terminal-tab automation.
 
 see [protocol and architecture notes](docs/architecture.md), [third-party notices](docs/third-party.md) and [issues](https://github.com/sorried/chatgpt-status-bar/issues).

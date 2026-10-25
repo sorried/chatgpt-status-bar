@@ -560,6 +560,24 @@ QDialog *App::settingsDialog() {
     settingRow(bar, l("details on hover", "подробности при наведении"),
                l("Reveal the task and its latest activity.", "показывать задачу и последнее действие."),
                hover);
+    auto *panelStyle = makeCombo({{l("pill", "пилюля"), "pill"}, {l("notch", "чёлка"), "notch"}},
+                                 settings.value("panelStyle", "pill").toString(), "panelStyleControl");
+    panelStyle->setAccessibleName(l("panel style", "форма панели"));
+    settingRow(bar, l("shape", "форма"),
+               l("Choose a rounded pill or a top-edge notch.", "пилюля или вырез у верхнего края."),
+               panelStyle);
+    auto *panelWidth = new QSpinBox;
+    panelWidth->setObjectName("panelWidthControl");
+    panelWidth->setRange(120, 480);
+    panelWidth->setSuffix(" px");
+    panelWidth->setValue(settings.value("panelWidth", 224).toInt());
+    settingRow(bar, l("width", "ширина"), {}, panelWidth);
+    auto *panelHeight = new QSpinBox;
+    panelHeight->setObjectName("panelHeightControl");
+    panelHeight->setRange(32, 100);
+    panelHeight->setSuffix(" px");
+    panelHeight->setValue(settings.value("panelHeight", 40).toInt());
+    settingRow(bar, l("height", "высота"), {}, panelHeight);
     for (auto *control : {visible, hover})
         connect(motion, &QCheckBox::toggled, control,
                 [control](bool checked) { control->setAnimated(checked); });
@@ -683,6 +701,9 @@ QDialog *App::settingsDialog() {
         settings.setValue("motion", motion->isChecked());
         settings.setValue("reduceTransparency", transparency->isChecked());
         settings.setValue("companion", visible->isChecked());
+        settings.setValue("panelStyle", panelStyle->currentData());
+        settings.setValue("panelWidth", panelWidth->value());
+        settings.setValue("panelHeight", panelHeight->value());
         settings.setValue("position", position->currentData());
         settings.setValue("screen", screen->currentIndex());
         settings.setValue("notifications", notifications->isChecked());

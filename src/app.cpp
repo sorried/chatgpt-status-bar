@@ -12,11 +12,14 @@
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QLineEdit>
 #include <QMenu>
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPainterPath>
+#include <QProcess>
 #include <QRadioButton>
 #include <QSaveFile>
 #include <QScreen>
@@ -58,7 +61,20 @@ void Companion::paintEvent(QPaintEvent *) {
     p.setRenderHint(QPainter::Antialiasing);
     p.setPen(QPen(QColor("#292929"), 1));
     p.setBrush(QColor("#050505"));
-    p.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 18, 18);
+    if (notch) {
+        const qreal radius = qMin<qreal>(18, height() / 2.0);
+        QPainterPath path;
+        path.moveTo(0, 0);
+        path.lineTo(width(), 0);
+        path.lineTo(width(), height() - radius);
+        path.quadTo(width(), height(), width() - radius, height());
+        path.lineTo(radius, height());
+        path.quadTo(0, height(), 0, height() - radius);
+        path.closeSubpath();
+        p.drawPath(path);
+    } else {
+        p.drawRoundedRect(rect().adjusted(1, 1, -1, -1), height() / 2.0, height() / 2.0);
+    }
 }
 void Companion::mouseReleaseEvent(QMouseEvent *e) {
     if (e->button() == Qt::LeftButton)
@@ -112,8 +128,18 @@ void Companion::place(int index, const QString &position) {
         return;
     const auto area = screens[qBound(0, index, int(screens.size()) - 1)]->availableGeometry();
     const int x = position == "top-right" ? area.right() - width() - 16 : area.center().x() - width() / 2;
-    const int y = position == "bottom" ? area.bottom() - height() - 16 : area.top() + 10;
+    const int y = position == "bottom" ? area.bottom() - height() - 16 : area.top() + (notch ? 0 : 10);
     move(x, y);
+}
+void Companion::setPanelStyle(bool isNotch, int panelWidth, int panelHeight) {
+    notch = isNotch;
+    setFixedSize(panelWidth, panelHeight);
+    const int iconSize = qMin(32, panelHeight - 8);
+    mascot->setFixedSize(iconSize, iconSize);
+    if (auto *layout = qobject_cast<QHBoxLayout *>(this->layout()))
+        layout->setContentsMargins(8, qMax(0, (panelHeight - iconSize) / 2), 14,
+                                   qMax(0, (panelHeight - iconSize) / 2));
+    update();
 }
 QString App::l(const char *en, const char *ru) const {
     return QString::fromUtf8(
@@ -503,6 +529,38 @@ void App::showWindow() {
     showNormal();
     raise();
     activateWindow();
+    keepCompanionAbove();
+}
+void App::keepCompanionAbove() {
+    if (qEnvironmentVariable("XDG_CURRENT_DESKTOP").contains("Hyprland", Qt::CaseInsensitive) &&
+        companion.isVisible()) {
+        const auto selector = QString("pid:%1").arg(QCoreApplication::applicationPid());
+        const QString rule =
+            QStringLiteral(R"(hl.dispatch(hl.dsp.window.pin({ action = "on", window = "%1" })); )")
+                .arg(selector) +
+            QStringLiteral(R"(hl.dispatch(hl.dsp.window.alter_zorder({ mode = "top", window = "%1" })))")
+                .arg(selector);
+        QProcess eval;
+        eval.start("hyprctl", {"eval", rule});
+        if (eval.waitForFinished(600) && eval.exitStatus() == QProcess::NormalExit && eval.exitCode() == 0)
+            return;
+        QProcess clients;
+        clients.start("hyprctl", {"clients", "-j"});
+        if (!clients.waitForFinished(500) || clients.exitStatus() != QProcess::NormalExit ||
+            clients.exitCode())
+            return;
+        const auto windows = QJsonDocument::fromJson(clients.readAllStandardOutput()).array();
+        for (const auto &entry : windows) {
+            const auto window = entry.toObject();
+            if (window.value("class").toString() != "gpt-status-bar" ||
+                window.value("pid").toInt() != QCoreApplication::applicationPid())
+                continue;
+            const QString address = "address:" + window.value("address").toString();
+            QProcess::execute("hyprctl", {"dispatch", "pin", address});
+            QProcess::execute("hyprctl", {"dispatch", "alterzorder", "top", address});
+            return;
+        }
+    }
 }
 void App::applySettings() {
     setWindowTitle(l("GPT status bar", "GPT status bar"));
@@ -515,11 +573,15 @@ void App::applySettings() {
     activity.denyButton->setText(l("deny", "отклонить"));
     activity.quitButton->setVisible(preview || !QSystemTrayIcon::isSystemTrayAvailable());
     companion.hoverEnabled = settings.value("hover", true).toBool();
+    companion.setPanelStyle(settings.value("panelStyle", "pill").toString() == "notch",
+                            qBound(120, settings.value("panelWidth", 224).toInt(), 480),
+                            qBound(32, settings.value("panelHeight", 40).toInt(), 100));
     if (!companion.hoverEnabled && !companion.pinned)
         companion.card->hide();
     companion.place(settings.value("screen", 0).toInt(), settings.value("position", "top").toString());
     companion.setVisible(settings.value("companion", true).toBool() ||
                          !QSystemTrayIcon::isSystemTrayAvailable());
+    QTimer::singleShot(450, this, &App::keepCompanionAbove);
     watcher.setInterval(settings.value("pollSeconds", 3).toInt() * 1000);
     auto *old = tray.contextMenu();
     auto *menu = new QMenu(this);
@@ -758,6 +820,10 @@ void App::capture(const QString &directory) {
     qApp->processEvents();
     dialog->grab().save(QDir(directory).filePath("settings.png"));
     dialog->findChild<QListWidget *>("navigation")->setCurrentRow(1);
+    qApp->processEvents();
+    auto *pages = dialog->findChild<QStackedWidget *>("settingsPages");
+    auto *scroll = qobject_cast<QScrollArea *>(pages->widget(1));
+    scroll->verticalScrollBar()->setValue(scroll->verticalScrollBar()->maximum());
     qApp->processEvents();
     dialog->grab().save(QDir(directory).filePath("appearance.png"));
     dialog->findChild<QListWidget *>("navigation")->setCurrentRow(2);

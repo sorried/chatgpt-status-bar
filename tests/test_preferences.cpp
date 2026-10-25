@@ -28,7 +28,7 @@ class PreferencesTests : public QObject {
         QVERIFY(directory.isValid());
         QCoreApplication::setOrganizationName("status-bar-tests");
         QCoreApplication::setApplicationName("preferences");
-        QCoreApplication::setApplicationVersion("0.3.0");
+        QCoreApplication::setApplicationVersion("0.4.0");
         QSettings::setDefaultFormat(QSettings::IniFormat);
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, directory.path());
         qApp->setQuitOnLastWindowClosed(false);
